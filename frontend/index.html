@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentri — Code Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <span class="wordmark">Sentri</span>
+  <span class="tagline">local model, checked against Gemini</span>
+</header>
+
+<main class="layout">
+
+  <section class="input-panel">
+    <h1>Paste code to review</h1>
+    <p class="hint">Sentri reviews it locally first. If confidence is low or it flags something, Gemini double-checks.</p>
+    <textarea id="code-input" spellcheck="false" placeholder="def get_user(request):&#10;    user_id = request.GET['id']&#10;    query = f&quot;SELECT * FROM users WHERE id = {user_id}&quot;&#10;    return db.execute(query)"></textarea>
+    <button id="submit-btn">Review code</button>
+    <p id="status-msg" class="status-msg"></p>
+  </section>
+
+  <section class="results-panel" id="results-panel">
+    <div class="empty-state" id="empty-state">
+      <p>No review yet.</p>
+      <p class="empty-sub">Paste code on the left and run a review to see how the local model and Gemini compare.</p>
+    </div>
+
+    <div class="results-content" id="results-content" hidden>
+
+      <div class="final-banner" id="final-banner">
+        <span class="final-label">Final decision from</span>
+        <span class="final-source" id="final-source-badge">—</span>
+        <span class="final-reason" id="final-reason"></span>
+      </div>
+
+      <div class="verdict-columns">
+        <article class="verdict-card local" id="local-card">
+          <header>
+            <h2>Local model</h2>
+            <span class="verdict-badge" id="local-verdict-badge">—</span>
+          </header>
+          <dl>
+            <dt>Confidence</dt>
+            <dd><div class="confidence-bar"><div class="confidence-fill" id="local-confidence-fill"></div></div><span id="local-confidence-text">—</span></dd>
+            <dt>CWE</dt>
+            <dd id="local-cwe">—</dd>
+            <dt>Explanation</dt>
+            <dd id="local-explanation" class="explanation">—</dd>
+          </dl>
+        </article>
+
+        <article class="verdict-card gemini" id="gemini-card">
+          <header>
+            <h2>Gemini</h2>
+            <span class="verdict-badge" id="gemini-verdict-badge">—</span>
+          </header>
+          <dl>
+            <dt>CWE</dt>
+            <dd id="gemini-cwe">—</dd>
+            <dt>Explanation</dt>
+            <dd id="gemini-explanation" class="explanation">—</dd>
+          </dl>
+        </article>
+      </div>
+
+      <p class="latency-note" id="latency-note"></p>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
