@@ -48,7 +48,7 @@ def build_training_examples(ds, max_examples: int = 4000):
             continue
 
         is_vuln = bool(row.get("vul", row.get("target", 0)))
-        cwe = row.get("CWE_ID", row.get("cwe", "unknown"))
+        cwe = row.get("CWE_ID") or row.get("cwe") or "unknown"
 
         examples.append({
             "instruction": (
@@ -60,7 +60,7 @@ def build_training_examples(ds, max_examples: int = 4000):
             "output": json.dumps({
                 "verdict": "vulnerable" if is_vuln else "safe",
                 "cwe": cwe if is_vuln else "none",
-                "explanation": row.get("commit_message", "")[:300] or "See CWE classification.",
+                "explanation": (row.get("commit_message") or "")[:300] or "See CWE classification.",
             }),
         })
 

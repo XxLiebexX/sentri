@@ -12,7 +12,7 @@ Run: python finetune/train.py
 import json
 from pathlib import Path
 
-BASE_MODEL = "Qwen/Qwen2.5-Coder-7B-Instruct"  # strong at code, fits LoRA on a free GPU
+BASE_MODEL = "Qwen/Qwen2.5-Coder-1.5B-Instruct"  # strong at code, fits LoRA on a free GPU
 OUTPUT_DIR = "sentri-local-model"
 
 
@@ -31,18 +31,25 @@ def format_example(example: dict) -> str:
 
 def main():
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, BitsAndBytesConfig
     from peft import LoraConfig, get_peft_model
-    from trl import SFTTrainer
+    from trl import SFTTrainer, SFTConfig
     from datasets import Dataset
 
     print(f"Loading base model: {BASE_MODEL}")
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+    )
+
     model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         device_map="auto",
-        load_in_4bit=True,  # QLoRA -- keeps memory low enough for a free GPU
+        quantization_config=bnb_config,
     )
 
     # LoRA config: only train small adapter matrices, not the full model.
@@ -63,10 +70,10 @@ def main():
     train_ds = Dataset.from_list([{"text": format_example(ex)} for ex in train_raw])
     val_ds = Dataset.from_list([{"text": format_example(ex)} for ex in val_raw])
 
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=OUTPUT_DIR,
-        per_device_train_batch_size=2,
-        gradient_accumulation_steps=8,  # effective batch size 16, fits small VRAM
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=4,
         num_train_epochs=3,
         learning_rate=2e-4,
         logging_steps=10,
@@ -75,6 +82,8 @@ def main():
         save_strategy="epoch",
         bf16=True,
         report_to="none",
+        dataset_text_field="text",
+        max_length=1024,
     )
 
     trainer = SFTTrainer(
@@ -82,8 +91,6 @@ def main():
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        dataset_text_field="text",
-        max_seq_length=2048,
     )
 
     print("Starting training...")
