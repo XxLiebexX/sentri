@@ -17,15 +17,15 @@ class LocalVerdict:
 
 
 class LocalReviewer:
-    def __init__(self, model_path: str = "sentri-local-model", base_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"):
+    def __init__(self, model_path: str = "sentri-local-model", base_model: str = "Qwen/Qwen2.5-Coder-1.5B-Instruct"):
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from peft import PeftModel
 
         self.tokenizer = AutoTokenizer.from_pretrained(base_model)
-        base = AutoModelForCausalLM.from_pretrained(
-            base_model, torch_dtype=torch.bfloat16, device_map="auto"
-        )
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        base = AutoModelForCausalLM.from_pretrained(base_model, dtype=torch.bfloat16)
+        base = base.to(device)
         self.model = PeftModel.from_pretrained(base, model_path)
         self.model.eval()
 

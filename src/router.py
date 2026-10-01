@@ -31,7 +31,7 @@ def escalate_to_gemini(code: str) -> ReviewResult:
 
     genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        model_name="gemini-3.8-flash",
         system_instruction="You are a senior code security reviewer.",
     )
 
