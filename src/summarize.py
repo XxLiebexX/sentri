@@ -85,7 +85,7 @@ def call_llm(system_prompt: str, user_prompt: str) -> str:
 
     genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
     model = genai.GenerativeModel(
-        model_name="gemini-3.8-flash",
+        model_name="gemini-flash-lite-latest",
         system_instruction=system_prompt,
     )
     response = model.generate_content(user_prompt)
