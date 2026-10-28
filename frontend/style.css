@@ -265,3 +265,149 @@ body {
   font-size: 12px;
   font-family: 'JetBrains Mono', monospace;
 }
+
+
+/* --- Mode tabs & repo scan view --- */
+
+.mode-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--ink-border);
+}
+
+.mode-tab {
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.mode-tab.active {
+  color: var(--text);
+  border-bottom: 2px solid var(--teal);
+}
+
+#repo-url-input {
+  width: 100%;
+  padding: 12px;
+  background: var(--ink-raised);
+  border: 1px solid var(--ink-border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+
+#repo-url-input:focus {
+  outline: 2px solid var(--teal);
+  outline-offset: -1px;
+}
+
+.max-files-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+}
+
+.max-files-label input {
+  width: 60px;
+  padding: 6px;
+  background: var(--ink-raised);
+  border: 1px solid var(--ink-border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: Inter, sans-serif;
+}
+
+.scan-results-content {
+  width: 100%;
+  max-width: 780px;
+}
+
+.scan-overview {
+  padding: 18px;
+  border-radius: 10px;
+  border: 1px solid var(--ink-border);
+  background: var(--ink-raised);
+  margin-bottom: 20px;
+}
+
+.scan-overview h2 {
+  font-family: Fraunces, serif;
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+
+.scan-overview p {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.scan-meta {
+  font-family: JetBrains Mono, monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.no-findings {
+  color: var(--text-dim);
+  font-size: 14px;
+  padding: 20px;
+  text-align: center;
+}
+
+.finding-item {
+  border: 1px solid var(--ink-border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  background: var(--ink-raised);
+}
+
+.finding-item.severity-error { border-left-color: var(--red); }
+.finding-item.severity-warning { border-left-color: var(--amber); }
+.finding-item.severity-info { border-left-color: var(--teal); }
+
+.finding-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.finding-file {
+  font-family: JetBrains Mono, monospace;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.finding-source {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.finding-category {
+  font-size: 12px;
+  color: var(--amber);
+  margin-bottom: 6px;
+}
+
+.finding-message {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+}

@@ -53,7 +53,7 @@ findings are a hint, not the final word -- confirm, dismiss, or add to
 them based on real understanding of this code."""
 
 
-def review_chunk(
+async def review_chunk(
     chunk: CodeChunk,
     local_reviewer: LocalReviewer,
     all_static_findings: list[StaticFinding],
@@ -66,7 +66,7 @@ def review_chunk(
     static_hits = findings_for_chunk(chunk, all_static_findings)
     prompt = build_review_prompt(chunk, static_hits)
 
-    result: ReviewResult = review_code(prompt, local_reviewer)
+    result: ReviewResult = await review_code(prompt, local_reviewer)
 
     findings = []
 
@@ -97,13 +97,18 @@ def review_chunk(
     return findings
 
 
-def review_all_chunks(
+async def review_all_chunks(
     chunks: list[CodeChunk],
     all_static_findings: list[StaticFinding],
 ) -> list[Finding]:
-    """Review every changed chunk in a PR. Loads the local model once, reuses it."""
-    local_reviewer = LocalReviewer()
+    """Review every changed chunk in a PR concurrently."""
+    import asyncio
+    local_reviewer = await asyncio.to_thread(LocalReviewer)
     all_findings = []
-    for chunk in chunks:
-        all_findings.extend(review_chunk(chunk, local_reviewer, all_static_findings))
+    
+    tasks = [review_chunk(chunk, local_reviewer, all_static_findings) for chunk in chunks]
+    results = await asyncio.gather(*tasks)
+    for res in results:
+        all_findings.extend(res)
+        
     return all_findings

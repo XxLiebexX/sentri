@@ -108,32 +108,37 @@ def extract_function_context(file_path: str, line_start: int, line_end: int, rep
 
 
 def _extract_python_block(lines: list[str], line_start: int, line_end: int) -> str:
-    """Walk upward to the nearest `def`/`class` at or below the hunk's
-    indentation, then walk downward until indentation returns to that level."""
-    idx = max(line_start - 1, 0)
-    idx = min(idx, len(lines) - 1)
+    """Use tree-sitter to find the exact enclosing function or class for the changed hunk."""
+    try:
+        import tree_sitter_python
+        from tree_sitter import Language, Parser
+    except ImportError:
+        # Fallback if not installed
+        return _extract_padded_window(lines, line_start, line_end)
 
-    def indent_of(line: str) -> int:
-        return len(line) - len(line.lstrip())
+    source_code = "".join(lines).encode("utf8")
+    
+    PY_LANGUAGE = Language(tree_sitter_python.language())
+    parser = Parser(PY_LANGUAGE)
+    tree = parser.parse(source_code)
+    
+    # line_start and line_end are 1-indexed, tree-sitter points are 0-indexed
+    start_point = (max(0, line_start - 1), 0)
+    end_point = (min(len(lines) - 1, line_end - 1), len(lines[min(len(lines) - 1, line_end - 1)]))
 
-    # Walk up to find the enclosing def/class
-    start_idx = idx
-    while start_idx > 0:
-        stripped = lines[start_idx].lstrip()
-        if stripped.startswith("def ") or stripped.startswith("class "):
+    # Walk the tree to find the smallest enclosing function_definition or class_definition
+    node = tree.root_node.descendant_for_point_range(start_point, end_point)
+    while node:
+        if node.type in ("function_definition", "class_definition"):
             break
-        start_idx -= 1
-    block_indent = indent_of(lines[start_idx])
-
-    # Walk down until indentation drops back to block level (end of function)
-    end_idx = min(line_end, len(lines) - 1)
-    while end_idx + 1 < len(lines):
-        next_line = lines[end_idx + 1]
-        if next_line.strip() and indent_of(next_line) <= block_indent:
-            break
-        end_idx += 1
-
-    return "".join(lines[start_idx:end_idx + 1])
+        node = node.parent
+        
+    if node:
+        # node.start_point[0] is the start line index
+        return "".join(lines[node.start_point[0]:node.end_point[0] + 1])
+    else:
+        # If no enclosing block found, fallback to padded window
+        return _extract_padded_window(lines, line_start, line_end)
 
 
 def _extract_padded_window(lines: list[str], line_start: int, line_end: int, pad: int = 15) -> str:

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sentri — Code Review</title>
+<title>Sentri</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -15,9 +15,14 @@
   <span class="tagline">local model, checked against Gemini</span>
 </header>
 
+<div class="mode-tabs">
+  <button class="mode-tab active" data-mode="snippet">Review Code</button>
+  <button class="mode-tab" data-mode="repo">Scan Repo</button>
+</div>
+
 <main class="layout">
 
-  <section class="input-panel">
+  <section class="input-panel" id="snippet-input-panel">
     <h1>Paste code to review</h1>
     <p class="hint">Sentri reviews it locally first. If confidence is low or it flags something, Gemini double-checks.</p>
     <textarea id="code-input" spellcheck="false" placeholder="def get_user(request):&#10;    user_id = request.GET['id']&#10;    query = f&quot;SELECT * FROM users WHERE id = {user_id}&quot;&#10;    return db.execute(query)"></textarea>
@@ -25,17 +30,28 @@
     <p id="status-msg" class="status-msg"></p>
   </section>
 
+  <section class="input-panel" id="repo-input-panel" hidden>
+    <h1>Scan a whole repo</h1>
+    <p class="hint">Clones the repo, gets a project overview, then reviews files one by one with the local model and Gemini.</p>
+    <input id="repo-url-input" type="text" placeholder="https://github.com/user/repo" spellcheck="false">
+    <label class="max-files-label">
+      Max files to review
+      <input id="max-files-input" type="number" value="5" min="1" max="30">
+    </label>
+    <button id="scan-btn">Scan repository</button>
+    <p id="scan-status-msg" class="status-msg"></p>
+  </section>
+
   <section class="results-panel" id="results-panel">
     <div class="empty-state" id="empty-state">
       <p>No review yet.</p>
-      <p class="empty-sub">Paste code on the left and run a review to see how the local model and Gemini compare.</p>
+      <p class="empty-sub">Paste code or scan a repo on the left to see results here.</p>
     </div>
 
     <div class="results-content" id="results-content" hidden>
-
       <div class="final-banner" id="final-banner">
         <span class="final-label">Final decision from</span>
-        <span class="final-source" id="final-source-badge">—</span>
+        <span class="final-source" id="final-source-badge">-</span>
         <span class="final-reason" id="final-reason"></span>
       </div>
 
@@ -43,33 +59,42 @@
         <article class="verdict-card local" id="local-card">
           <header>
             <h2>Local model</h2>
-            <span class="verdict-badge" id="local-verdict-badge">—</span>
+            <span class="verdict-badge" id="local-verdict-badge">-</span>
           </header>
           <dl>
             <dt>Confidence</dt>
-            <dd><div class="confidence-bar"><div class="confidence-fill" id="local-confidence-fill"></div></div><span id="local-confidence-text">—</span></dd>
+            <dd><div class="confidence-bar"><div class="confidence-fill" id="local-confidence-fill"></div></div><span id="local-confidence-text">-</span></dd>
             <dt>CWE</dt>
-            <dd id="local-cwe">—</dd>
+            <dd id="local-cwe">-</dd>
             <dt>Explanation</dt>
-            <dd id="local-explanation" class="explanation">—</dd>
+            <dd id="local-explanation" class="explanation">-</dd>
           </dl>
         </article>
 
         <article class="verdict-card gemini" id="gemini-card">
           <header>
             <h2>Gemini</h2>
-            <span class="verdict-badge" id="gemini-verdict-badge">—</span>
+            <span class="verdict-badge" id="gemini-verdict-badge">-</span>
           </header>
           <dl>
             <dt>CWE</dt>
-            <dd id="gemini-cwe">—</dd>
+            <dd id="gemini-cwe">-</dd>
             <dt>Explanation</dt>
-            <dd id="gemini-explanation" class="explanation">—</dd>
+            <dd id="gemini-explanation" class="explanation">-</dd>
           </dl>
         </article>
       </div>
 
       <p class="latency-note" id="latency-note"></p>
+    </div>
+
+    <div class="scan-results-content" id="scan-results-content" hidden>
+      <div class="scan-overview" id="scan-overview">
+        <h2 id="scan-project-type">-</h2>
+        <p id="scan-purpose">-</p>
+        <p class="scan-meta" id="scan-meta"></p>
+      </div>
+      <div id="scan-findings-list"></div>
     </div>
   </section>
 

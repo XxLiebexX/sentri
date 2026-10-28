@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from src.local_model import LocalReviewer, LocalVerdict
 
-CONFIDENCE_THRESHOLD = 0.75
+CONFIDENCE_THRESHOLD = 0.98
 
 
 @dataclass
@@ -26,9 +26,10 @@ class ReviewResult:
     source: str
 
 
-def escalate_to_gemini(code: str, _retries: int = 4) -> ReviewResult:
+async def escalate_to_gemini(code: str, _retries: int = 4) -> ReviewResult:
     import google.generativeai as genai
     from google.api_core.exceptions import ResourceExhausted
+    import asyncio
 
     genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
     model = genai.GenerativeModel(
@@ -45,14 +46,14 @@ def escalate_to_gemini(code: str, _retries: int = 4) -> ReviewResult:
     response = None
     for attempt in range(_retries):
         try:
-            response = model.generate_content(prompt)
+            response = await model.generate_content_async(prompt)
             break
         except ResourceExhausted:
             if attempt == _retries - 1:
                 raise
             wait = 20
             print(f"[router] Rate limited, waiting {wait}s (attempt {attempt+1}/{_retries})...")
-            time.sleep(wait)
+            await asyncio.sleep(wait)
 
     # Handle blocked / empty responses instead of crashing on response.text
     if not response or not response.candidates:
@@ -86,8 +87,9 @@ def escalate_to_gemini(code: str, _retries: int = 4) -> ReviewResult:
     )
 
 
-def review_code(code: str, local_reviewer: LocalReviewer) -> ReviewResult:
-    local: LocalVerdict = local_reviewer.review(code)
+async def review_code(code: str, local_reviewer: LocalReviewer) -> ReviewResult:
+    import asyncio
+    local: LocalVerdict = await asyncio.to_thread(local_reviewer.review, code)
 
     should_escalate = (
         local.confidence < CONFIDENCE_THRESHOLD
@@ -103,4 +105,4 @@ def review_code(code: str, local_reviewer: LocalReviewer) -> ReviewResult:
             source="local",
         )
 
-    return escalate_to_gemini(code)
+    return await escalate_to_gemini(code)

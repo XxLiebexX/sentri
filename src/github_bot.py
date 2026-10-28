@@ -56,12 +56,25 @@ def clone_pr_branch(clone_url: str, branch: str) -> str:
     return dest
 
 
-def get_changed_files(repo_path: str) -> list[str]:
-    result = subprocess.run(
-        ["git", "-C", repo_path, "diff", "--name-only", "HEAD~1"],
-        capture_output=True, text=True,
-    )
-    return [f.strip() for f in result.stdout.splitlines() if f.strip()]
+def get_pr_diff(owner: str, repo: str, pr_number: int) -> str:
+    url = f"{GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_number}"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3.diff",
+    }
+    resp = requests.get(url, headers=headers, timeout=15)
+    resp.raise_for_status()
+    return resp.text
+
+def get_changed_files_api(owner: str, repo: str, pr_number: int) -> list[str]:
+    url = f"{GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_number}/files"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+    }
+    resp = requests.get(url, headers=headers, timeout=15)
+    resp.raise_for_status()
+    return [f["filename"] for f in resp.json()]
 
 
 def post_review_comment(owner: str, repo: str, pr_number: int, commit_sha: str, finding) -> None:
@@ -110,17 +123,14 @@ async def handle_webhook(request: Request):
 
     repo_path = clone_pr_branch(clone_url, branch)
     try:
-        changed_files = get_changed_files(repo_path)
+        changed_files = get_changed_files_api(owner, repo, pr_number)
         if not changed_files:
             return {"status": "no_changes"}
 
-        diff_result = subprocess.run(
-            ["git", "-C", repo_path, "diff", "HEAD~1", "--unified=3"],
-            capture_output=True, text=True,
-        )
-        chunks = build_chunks(diff_result.stdout, repo_path=repo_path)
+        diff_text = get_pr_diff(owner, repo, pr_number)
+        chunks = build_chunks(diff_text, repo_path=repo_path)
         static_findings = run_semgrep(changed_files, repo_path=repo_path)
-        findings = review_all_chunks(chunks, static_findings)
+        findings = await review_all_chunks(chunks, static_findings)
 
         for finding in findings:
             post_review_comment(owner, repo, pr_number, commit_sha, finding)
