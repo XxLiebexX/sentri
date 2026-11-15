@@ -1,5 +1,10 @@
 # Sentri — Hybrid AI Code Review & Security Agent
 
+[![CI](https://github.com/XxLiebexX/sentri/actions/workflows/ci.yml/badge.svg)](https://github.com/XxLiebexX/sentri/actions/workflows/ci.yml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Tests](https://img.shields.io/badge/Tests-23%20Passing-success)](tests/)
+
 Sentri is an intelligent, cost-effective code review agent designed to catch security vulnerabilities and architectural convention violations. It uses a **"cheap filter, expensive escalation"** architecture: running a fast, locally fine-tuned small language model (SLM) on your machine first, and escalating to Google Gemini Flash only when confidence is low or when vulnerabilities are detected.
 
 ---
