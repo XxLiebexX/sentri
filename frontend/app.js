@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:8000";
+const API_BASE = window.location.port === "3001" ? "http://localhost:8000" : "";
 
 const modeTabs = document.querySelectorAll(".mode-tab");
 const snippetPanel = document.getElementById("snippet-input-panel");

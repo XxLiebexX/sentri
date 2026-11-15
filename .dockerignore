@@ -1,0 +1,31 @@
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Git & IDE
+.git/
+.idea/
+.vscode/
+
+# Python bytecode & caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cache directory (handled via volume)
+.stage0_cache/
+
+# Logs and local keys
+frontend/api.txt
+*.log
+
+# Training optimizer checkpoints to save image size
+sentri-local-model/checkpoint-*/optimizer.pt
+sentri-local-model/checkpoint-*/rng_state.pth
+sentri-local-model/checkpoint-*/scheduler.pt

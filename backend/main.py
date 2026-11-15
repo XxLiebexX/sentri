@@ -212,3 +212,13 @@ async def get_project_overview(req: OverviewRequest):
 @app.get("/api/health")
 def health():
     return {"status": "ok", "model_loaded": _local_reviewer is not None}
+
+
+# Serve frontend web dashboard directly from FastAPI (unified single-port serving)
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
+_frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+if _frontend_dir.exists():
+    app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")
+

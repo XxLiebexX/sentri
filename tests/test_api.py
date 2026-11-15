@@ -20,6 +20,12 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(data.get("status"), "ok")
         self.assertIn("model_loaded", data)
 
+    def test_root_serves_frontend(self):
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/html", resp.headers.get("content-type", ""))
+        self.assertIn("Sentri", resp.text)
+
     def test_review_empty_code_returns_400(self):
         resp = self.client.post("/api/review", json={"code": "   "})
         self.assertEqual(resp.status_code, 400)

@@ -73,18 +73,22 @@ pip install -r requirements.txt
 export GEMINI_API_KEY="your_api_key_here"
 ```
 
-### 2. Run the Web Dashboard
+### 2. Run the Web Dashboard (Unified Single-Port)
 
-Start the backend API:
+Start the server:
 ```bash
 uvicorn backend.main:app --port 8000
 ```
+Open **`http://localhost:8000`** in your browser (serves both the interactive UI and the API).
 
-Serve the frontend:
+---
+
+### 🐳 Run with Docker (1-Command Deploy)
+
 ```bash
-python3 -m http.server 3001 --directory frontend
+docker compose up -d
 ```
-Open **`http://localhost:3001`** in your browser.
+Sentri will build, install Semgrep and dependencies, and start serving at **`http://localhost:8000`**.
 
 ---
 

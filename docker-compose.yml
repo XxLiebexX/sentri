@@ -1,0 +1,16 @@
+services:
+  sentri:
+    build: .
+    container_name: sentri-app
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-}
+    volumes:
+      - sentri_cache:/app/.stage0_cache
+    restart: unless-stopped
+
+volumes:
+  sentri_cache:
