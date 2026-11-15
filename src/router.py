@@ -24,6 +24,7 @@ class ReviewResult:
     cwe: str
     explanation: str
     source: str
+    suggested_fix: str | None = None
 
 
 async def escalate_to_gemini(code: str, _retries: int = 4) -> ReviewResult:
@@ -40,7 +41,7 @@ async def escalate_to_gemini(code: str, _retries: int = 4) -> ReviewResult:
     prompt = (
         "Review the following code for security vulnerabilities and bugs, for defensive code review purposes. "
         "Respond with ONLY a JSON object: {\"verdict\": \"vulnerable\"|\"safe\", "
-        "\"cwe\": \"...\", \"explanation\": \"...\"}\n\n" + code
+        "\"cwe\": \"...\", \"explanation\": \"...\", \"suggested_fix\": \"replacement code string fixing the issue, or null\"}\n\n" + code
     )
 
     response = None
@@ -64,6 +65,7 @@ async def escalate_to_gemini(code: str, _retries: int = 4) -> ReviewResult:
             cwe="unknown",
             explanation=f"Gemini blocked this request (reason: {reason}). Treat as needing manual review.",
             source="gemini_blocked",
+            suggested_fix=None,
         )
 
     import json
@@ -77,6 +79,7 @@ async def escalate_to_gemini(code: str, _retries: int = 4) -> ReviewResult:
             cwe="unknown",
             explanation="Could not parse Gemini response.",
             source="gemini_blocked",
+            suggested_fix=None,
         )
 
     return ReviewResult(
@@ -84,6 +87,7 @@ async def escalate_to_gemini(code: str, _retries: int = 4) -> ReviewResult:
         cwe=data.get("cwe", "unknown"),
         explanation=data.get("explanation", ""),
         source="gemini",
+        suggested_fix=data.get("suggested_fix") or None,
     )
 
 
@@ -103,6 +107,7 @@ async def review_code(code: str, local_reviewer: LocalReviewer) -> ReviewResult:
             cwe=local.cwe,
             explanation=local.explanation,
             source="local",
+            suggested_fix=getattr(local, "suggested_fix", None),
         )
 
     return await escalate_to_gemini(code)

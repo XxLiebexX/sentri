@@ -21,6 +21,7 @@ class Finding:
     category: str          # e.g. CWE id, or "style" / "logic"
     message: str
     source: str            # "local" | "gemini" | "static" -- powers the dashboard comparison
+    suggested_fix: str | None = None
 
 
 def build_review_prompt(chunk: CodeChunk, static_findings: list[StaticFinding]) -> str:
@@ -79,6 +80,7 @@ async def review_chunk(
             category=result.cwe,
             message=result.explanation,
             source=result.source,
+            suggested_fix=result.suggested_fix,
         ))
 
     # Static findings that the LLM didn't already cover get surfaced too --

@@ -15,6 +15,7 @@ class LocalVerdict:
     cwe: str
     explanation: str
     confidence: float     # 0-1, derived from output token probabilities
+    suggested_fix: str | None = None
 
 
 class LocalReviewer:
@@ -80,4 +81,5 @@ class LocalReviewer:
                 cwe=parsed.get("cwe", "unknown"),
                 explanation=parsed.get("explanation", ""),
                 confidence=confidence,
+                suggested_fix=parsed.get("suggested_fix") or None,
             )

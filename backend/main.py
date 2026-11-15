@@ -58,6 +58,7 @@ class VerdictOut(BaseModel):
     cwe: str
     explanation: str
     confidence: float | None = None
+    suggested_fix: str | None = None
 
 class ReviewResponse(BaseModel):
     local: VerdictOut
@@ -104,11 +105,13 @@ async def review(req: ReviewRequest):
             cwe=local.cwe,
             explanation=local.explanation,
             confidence=round(local.confidence, 3),
+            suggested_fix=getattr(local, "suggested_fix", None),
         ),
         gemini=VerdictOut(
             verdict=gemini_result.verdict,
             cwe=gemini_result.cwe,
             explanation=gemini_result.explanation,
+            suggested_fix=gemini_result.suggested_fix,
         ),
         final_source="gemini" if escalated else "local",
         escalated=escalated,
@@ -129,6 +132,7 @@ class RepoFindingOut(BaseModel):
     category: str
     message: str
     source: str
+    suggested_fix: str | None = None
 
 
 class ScanResponse(BaseModel):
@@ -157,7 +161,15 @@ async def scan_repo_endpoint(req: ScanRequest):
         files_scanned=report.files_scanned,
         files_skipped=report.files_skipped,
         findings=[
-            RepoFindingOut(file=f.file, line=f.line, severity=f.severity, category=f.category, message=f.message, source=f.source)
+            RepoFindingOut(
+                file=f.file,
+                line=f.line,
+                severity=f.severity,
+                category=f.category,
+                message=f.message,
+                source=f.source,
+                suggested_fix=f.suggested_fix,
+            )
             for f in report.findings
         ],
     )

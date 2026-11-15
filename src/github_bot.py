@@ -49,11 +49,14 @@ def verify_signature(payload_body: bytes, signature_header: str) -> bool:
     return hmac.compare_digest(expected, signature_header)
 
 
-def clone_pr_branch(clone_url: str, branch: str) -> str:
-    """Shallow-clone just the PR's branch into a temp dir."""
+def clone_pr_branch(clone_url: str, branch: str, token: str | None = None) -> str:
+    """Shallow-clone just the PR's branch into a temp dir with optional token auth for private repos."""
     dest = tempfile.mkdtemp(prefix="sentri_pr_")
+    auth_url = clone_url
+    if token and "github.com" in clone_url and "@" not in clone_url:
+        auth_url = clone_url.replace("https://", f"https://x-access-token:{token}@")
     subprocess.run(
-        ["git", "clone", "--depth", "2", "--branch", branch, clone_url, dest],
+        ["git", "clone", "--depth", "2", "--branch", branch, auth_url, dest],
         capture_output=True, text=True, timeout=120, check=True,
     )
     return dest
@@ -81,13 +84,16 @@ def get_changed_files_api(owner: str, repo: str, pr_number: int) -> list[str]:
 
 
 def post_review_comment(owner: str, repo: str, pr_number: int, commit_sha: str, finding) -> None:
-    """Post a single finding as an inline PR review comment with fallback to PR general comment."""
+    """Post a single finding as an inline PR review comment with one-click suggestion, falling back to PR issue comment."""
     url = f"{GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_number}/comments"
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github+json",
     }
     body = f"**[{finding.severity.upper()}] {finding.category}** (via {finding.source})\n\n{finding.message}"
+    if getattr(finding, "suggested_fix", None):
+        body += f"\n\n```suggestion\n{finding.suggested_fix.strip()}\n```"
+
     payload = {
         "body": body,
         "commit_id": commit_sha,
@@ -100,7 +106,51 @@ def post_review_comment(owner: str, repo: str, pr_number: int, commit_sha: str, 
         print(f"[github_bot] Inline comment rejected ({resp.status_code}) on {finding.file}:{finding.line} -- falling back to PR general comment")
         issue_url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{pr_number}/comments"
         fallback_body = f"⚠️ **[{finding.severity.upper()}] {finding.category}** on `{finding.file}:{finding.line}` (via {finding.source})\n\n{finding.message}"
+        if getattr(finding, "suggested_fix", None):
+            fallback_body += f"\n\n**Suggested Fix:**\n```\n{finding.suggested_fix.strip()}\n```"
         requests.post(issue_url, headers=headers, json={"body": fallback_body}, timeout=15)
+
+
+def post_summary_comment(owner: str, repo: str, pr_number: int, findings: list, changed_files: list) -> None:
+    """Post a high-level review summary badge & breakdown on the PR."""
+    if not GITHUB_TOKEN:
+        return
+    url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{pr_number}/comments"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+    }
+
+    errors = sum(1 for f in findings if f.severity.lower() == "error")
+    warnings = sum(1 for f in findings if f.severity.lower() == "warning")
+    infos = len(findings) - errors - warnings
+
+    by_source = {}
+    for f in findings:
+        by_source[f.source] = by_source.get(f.source, 0) + 1
+
+    source_breakdown = ", ".join(f"{src}: {cnt}" for src, cnt in by_source.items()) or "None"
+
+    if not findings:
+        status_banner = "✅ **Sentri Review: All Clean!** No vulnerabilities or convention violations detected."
+    else:
+        status_banner = f"⚠️ **Sentri Review: {len(findings)} issue(s) detected** ({errors} errors, {warnings} warnings, {infos} info)."
+
+    body = f"""### 🛡️ Sentri AI Code Security Report
+
+{status_banner}
+
+- **Files Checked**: {len(changed_files)} file(s)
+- **Review Engines**: {source_breakdown}
+- **Architecture Spec**: Checked against project ground-truth conventions
+
+---
+*Powered by Sentri Hybrid AI (Local LoRA + Gemini Flash)*
+"""
+    try:
+        requests.post(url, headers=headers, json={"body": body}, timeout=15)
+    except Exception as e:
+        print(f"[github_bot] Failed to post PR summary comment: {e}")
 
 
 @app.post("/webhook")
@@ -123,11 +173,14 @@ async def handle_webhook(request: Request):
     pr_number = pr["number"]
     branch = pr["head"]["ref"]
     commit_sha = pr["head"]["sha"]
-    clone_url = payload["repository"]["clone_url"]
 
-    print(f"[github_bot] Reviewing PR #{pr_number} on {owner}/{repo} ({branch})")
+    # Support forked repos: head repo clone URL may differ from base repo
+    head_repo = pr.get("head", {}).get("repo")
+    clone_url = (head_repo.get("clone_url") if head_repo else None) or payload["repository"]["clone_url"]
 
-    repo_path = clone_pr_branch(clone_url, branch)
+    print(f"[github_bot] Reviewing PR #{pr_number} on {owner}/{repo} (branch: {branch}, clone_url: {clone_url})")
+
+    repo_path = clone_pr_branch(clone_url, branch, token=GITHUB_TOKEN)
     try:
         changed_files = get_changed_files_api(owner, repo, pr_number)
         if not changed_files:
@@ -157,7 +210,9 @@ async def handle_webhook(request: Request):
         for finding in findings:
             post_review_comment(owner, repo, pr_number, commit_sha, finding)
 
-        print(f"[github_bot] Posted {len(findings)} findings on PR #{pr_number}")
+        post_summary_comment(owner, repo, pr_number, findings, changed_files)
+
+        print(f"[github_bot] Posted {len(findings)} findings & summary on PR #{pr_number}")
         return {"status": "reviewed", "findings_count": len(findings)}
 
     finally:

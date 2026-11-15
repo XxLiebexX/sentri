@@ -93,7 +93,24 @@ function renderResults(data) {
   document.getElementById("gemini-cwe").textContent = data.gemini.cwe || "-";
   document.getElementById("gemini-explanation").textContent = data.gemini.explanation || "-";
 
+  const fixLabel = document.getElementById("gemini-fix-label");
+  const fixBox = document.getElementById("gemini-fix-box");
+  const suggestedFix = data.gemini.suggested_fix || data.local.suggested_fix;
+  if (suggestedFix && fixLabel && fixBox) {
+    fixLabel.hidden = false;
+    fixBox.hidden = false;
+    fixBox.innerHTML = `<pre><code>${escapeHtml(suggestedFix.trim())}</code></pre>`;
+  } else if (fixLabel && fixBox) {
+    fixLabel.hidden = true;
+    fixBox.hidden = true;
+  }
+
   document.getElementById("latency-note").textContent = `Reviewed in ${data.latency_ms}ms`;
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function setVerdictBadge(elId, verdict) {
@@ -171,6 +188,17 @@ function renderScanResults(data) {
   for (const finding of sorted) {
     const item = document.createElement("div");
     item.className = `finding-item severity-${finding.severity}`;
+    
+    let fixHtml = "";
+    if (finding.suggested_fix) {
+      fixHtml = `
+        <div class="finding-fix">
+          <div class="fix-label">Suggested Fix:</div>
+          <pre><code>${escapeHtml(finding.suggested_fix.trim())}</code></pre>
+        </div>
+      `;
+    }
+
     item.innerHTML = `
       <div class="finding-header">
         <span class="finding-file">${finding.file}:${finding.line}</span>
@@ -178,6 +206,7 @@ function renderScanResults(data) {
       </div>
       <div class="finding-category">${finding.category}</div>
       <div class="finding-message">${finding.message}</div>
+      ${fixHtml}
     `;
     listEl.appendChild(item);
   }

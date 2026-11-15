@@ -45,6 +45,7 @@ class RepoFinding:
     category: str
     message: str
     source: str
+    suggested_fix: str | None = None
 
 
 @dataclass
@@ -121,6 +122,7 @@ CODE:
             category=result.cwe,
             message=result.explanation,
             source=result.source,
+            suggested_fix=result.suggested_fix,
         )]
     return []
 
