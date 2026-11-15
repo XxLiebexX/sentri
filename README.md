@@ -105,6 +105,11 @@ Open **`http://localhost:3001`** in your browser.
   python eval/compare_strategies.py
   ```
 
+- **Run Automated Test Suite**:
+  ```bash
+  python -m unittest discover tests
+  ```
+
 - **Start GitHub PR Webhook Bot**:
   ```bash
   export GITHUB_TOKEN="ghp_xxx"
