@@ -99,12 +99,21 @@ function renderResults(data) {
   if (suggestedFix && fixLabel && fixBox) {
     fixLabel.hidden = false;
     fixBox.hidden = false;
+
+    const originalCode = codeInput.value.trim();
+    const diff = computeLineDiff(originalCode, suggestedFix.trim());
+    const diffHtml = renderDiffHtml(diff);
+
     fixBox.innerHTML = `
       <div class="fix-header">
-        <span class="fix-badge">Remediation Patch</span>
+        <div class="fix-tabs">
+          <button class="fix-tab active" onclick="switchFixTab(this, 'diff')">⚡ Visual Diff</button>
+          <button class="fix-tab" onclick="switchFixTab(this, 'raw')">📄 Fixed Code</button>
+        </div>
         <button class="copy-fix-btn" onclick="copyCode(this)">📋 Copy Fix</button>
       </div>
-      <pre><code>${escapeHtml(suggestedFix.trim())}</code></pre>
+      <div class="diff-view">${diffHtml}</div>
+      <div class="raw-view" hidden><pre><code>${escapeHtml(suggestedFix.trim())}</code></pre></div>
     `;
   } else if (fixLabel && fixBox) {
     fixLabel.hidden = true;
@@ -119,10 +128,85 @@ function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function computeLineDiff(oldText, newText) {
+  const oldLines = oldText ? oldText.split(/\r?\n/) : [];
+  const newLines = newText ? newText.split(/\r?\n/) : [];
+
+  const m = oldLines.length;
+  const n = newLines.length;
+  const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
+
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) {
+      if (oldLines[i].trimEnd() === newLines[j].trimEnd()) {
+        dp[i + 1][j + 1] = dp[i][j] + 1;
+      } else {
+        dp[i + 1][j + 1] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+  }
+
+  let i = m, j = n;
+  const diff = [];
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1].trimEnd() === newLines[j - 1].trimEnd()) {
+      diff.unshift({ type: "same", text: oldLines[i - 1], oldNum: i, newNum: j });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      diff.unshift({ type: "add", text: newLines[j - 1], oldNum: null, newNum: j });
+      j--;
+    } else {
+      diff.unshift({ type: "del", text: oldLines[i - 1], oldNum: i, newNum: null });
+      i--;
+    }
+  }
+  return diff;
+}
+
+function renderDiffHtml(diff) {
+  let html = `<div class="diff-viewer">`;
+  for (const line of diff) {
+    const cls = line.type === "add" ? "diff-added" : (line.type === "del" ? "diff-removed" : "diff-unchanged");
+    const sign = line.type === "add" ? "+" : (line.type === "del" ? "-" : " ");
+    const oldN = line.oldNum !== null ? line.oldNum : "";
+    const newN = line.newNum !== null ? line.newNum : "";
+    html += `
+      <div class="diff-line ${cls}">
+        <span class="diff-num old-num">${oldN}</span>
+        <span class="diff-num new-num">${newN}</span>
+        <span class="diff-sign">${sign}</span>
+        <span class="diff-text">${escapeHtml(line.text)}</span>
+      </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+window.switchFixTab = function(btn, mode) {
+  const container = btn.closest(".fix-container, .finding-fix");
+  if (!container) return;
+  const tabs = container.querySelectorAll(".fix-tab");
+  tabs.forEach(t => t.classList.remove("active"));
+  btn.classList.add("active");
+
+  const diffView = container.querySelector(".diff-view");
+  const rawView = container.querySelector(".raw-view");
+  if (diffView && rawView) {
+    if (mode === "diff") {
+      diffView.hidden = false;
+      rawView.hidden = true;
+    } else {
+      diffView.hidden = true;
+      rawView.hidden = false;
+    }
+  }
+};
+
 window.copyCode = function(btn) {
   const container = btn.closest(".fix-container, .finding-fix");
   if (!container) return;
-  const codeEl = container.querySelector("code");
+  const codeEl = container.querySelector(".raw-view code, pre code");
   if (!codeEl) return;
   const text = codeEl.innerText || codeEl.textContent;
   navigator.clipboard.writeText(text).then(() => {

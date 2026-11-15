@@ -428,6 +428,35 @@ body {
   margin-bottom: 8px;
 }
 
+.fix-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.fix-tab {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+  padding: 3px 9px;
+  font-size: 11px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.fix-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.fix-tab.active {
+  background: var(--ink-border);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.12);
+  font-weight: 500;
+}
+
 .fix-badge,
 .fix-label {
   font-size: 11px;
@@ -458,6 +487,68 @@ body {
   background: var(--teal-dim);
   color: var(--teal);
   border-color: var(--teal);
+}
+
+.diff-viewer {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(10, 14, 20, 0.85);
+  border-radius: 6px;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 6px 0;
+}
+
+.diff-line {
+  display: flex;
+  padding: 1px 0;
+  min-width: 100%;
+}
+
+.diff-line.diff-unchanged {
+  color: #8b949e;
+}
+
+.diff-line.diff-removed {
+  background: rgba(232, 99, 107, 0.16);
+  color: #ff8a93;
+}
+
+.diff-line.diff-added {
+  background: rgba(38, 166, 154, 0.16);
+  color: #80cbc4;
+}
+
+.diff-num {
+  width: 32px;
+  text-align: right;
+  padding-right: 8px;
+  color: #484f58;
+  user-select: none;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.diff-line.diff-removed .diff-num.old-num {
+  color: rgba(232, 99, 107, 0.7);
+}
+
+.diff-line.diff-added .diff-num.new-num {
+  color: rgba(38, 166, 154, 0.7);
+}
+
+.diff-sign {
+  width: 18px;
+  text-align: center;
+  user-select: none;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.diff-text {
+  white-space: pre;
+  padding-right: 12px;
 }
 
 .fix-container pre,
