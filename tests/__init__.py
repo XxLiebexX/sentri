@@ -1,0 +1,1 @@
+# Sentri automated test suite
