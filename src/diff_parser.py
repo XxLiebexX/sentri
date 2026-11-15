@@ -7,6 +7,7 @@ actually judge correctness, not just pattern-match on a fragment.
 
 import re
 import subprocess
+from pathlib import Path
 from dataclasses import dataclass, field
 
 
@@ -82,12 +83,21 @@ def parse_diff(diff_text: str) -> list[dict]:
     return hunks
 
 
+BRACE_EXTENSIONS = {
+    ".js", ".jsx", ".mjs", ".cjs",
+    ".ts", ".tsx",
+    ".java", ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp",
+    ".cs", ".go", ".rs", ".php", ".swift", ".kt",
+}
+
+CONTROL_FLOW_RE = re.compile(r"^\s*(if|else|for|while|switch|case|try|catch|finally|do)\b")
+
+
 def extract_function_context(file_path: str, line_start: int, line_end: int, repo_path: str = ".") -> str:
     """
     Grab the full function/block a changed hunk lives inside, not just the
-    changed lines. Uses simple indentation-based scanning -- good enough
-    for Python; for brace languages it falls back to a padded line window.
-    Swap for tree-sitter later if you want it airtight across languages.
+    changed lines. Uses Tree-Sitter for Python, brace-matching for C-style languages
+    (JS/TS/Java/Go/C++), and falls back to a padded line window for others.
     """
     full_path = f"{repo_path.rstrip('/')}/{file_path}"
     try:
@@ -99,12 +109,82 @@ def extract_function_context(file_path: str, line_start: int, line_end: int, rep
     if not lines:
         return ""
 
-    is_python = file_path.endswith(".py")
-
-    if is_python:
+    ext = Path(file_path).suffix.lower()
+    if ext == ".py":
         return _extract_python_block(lines, line_start, line_end)
+    elif ext in BRACE_EXTENSIONS:
+        brace_block = _extract_brace_block(lines, line_start, line_end)
+        if brace_block:
+            return brace_block
+        return _extract_padded_window(lines, line_start, line_end)
     else:
         return _extract_padded_window(lines, line_start, line_end)
+
+
+def _extract_brace_block(lines: list[str], line_start: int, line_end: int, max_scan: int = 150) -> str | None:
+    """
+    Extract the enclosing function or method block for brace-delimited languages
+    (JavaScript, TypeScript, Go, Java, C/C++, Rust, etc.).
+    Scans upward to locate the enclosing function header, then balances braces forward.
+    """
+    start_idx = max(0, line_start - 1)
+
+    depth = 0
+    enclosing_open_line = None
+
+    # Scan backwards to locate the opening brace of the enclosing function
+    for idx in range(start_idx, max(-1, start_idx - max_scan), -1):
+        line = lines[idx]
+        clean = line.split("//")[0]  # strip single-line comments
+        for ch in reversed(clean):
+            if ch == "}":
+                depth += 1
+            elif ch == "{":
+                if depth > 0:
+                    depth -= 1
+                else:
+                    enclosing_open_line = idx
+                    # If this block is a control flow statement (e.g. if/for), continue climbing
+                    if not CONTROL_FLOW_RE.match(clean.strip()):
+                        break
+        if enclosing_open_line is not None and not CONTROL_FLOW_RE.match(clean.strip()):
+            break
+
+    if enclosing_open_line is None:
+        return None
+
+    # Walk backward to capture multiline signatures (parameters, annotations/decorators)
+    sig_start = enclosing_open_line
+    while sig_start > 0:
+        prev = lines[sig_start - 1].strip()
+        if not prev or prev.endswith(";") or prev.endswith("{") or prev.endswith("}"):
+            break
+        sig_start -= 1
+
+    # Check for preceding annotations/decorators (e.g., @Override, @Transactional)
+    while sig_start > 0 and lines[sig_start - 1].strip().startswith("@"):
+        sig_start -= 1
+
+    # Scan forward to locate the matching closing brace
+    f_depth = 0
+    end_line = None
+    for idx in range(enclosing_open_line, len(lines)):
+        clean = lines[idx].split("//")[0]
+        for ch in clean:
+            if ch == "{":
+                f_depth += 1
+            elif ch == "}":
+                f_depth -= 1
+                if f_depth == 0:
+                    end_line = idx
+                    break
+        if end_line is not None:
+            break
+
+    if end_line is None:
+        end_line = min(len(lines) - 1, line_end + 15)
+
+    return "".join(lines[sig_start:end_line + 1])
 
 
 def _extract_python_block(lines: list[str], line_start: int, line_end: int) -> str:

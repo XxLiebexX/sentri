@@ -99,7 +99,13 @@ function renderResults(data) {
   if (suggestedFix && fixLabel && fixBox) {
     fixLabel.hidden = false;
     fixBox.hidden = false;
-    fixBox.innerHTML = `<pre><code>${escapeHtml(suggestedFix.trim())}</code></pre>`;
+    fixBox.innerHTML = `
+      <div class="fix-header">
+        <span class="fix-badge">Remediation Patch</span>
+        <button class="copy-fix-btn" onclick="copyCode(this)">📋 Copy Fix</button>
+      </div>
+      <pre><code>${escapeHtml(suggestedFix.trim())}</code></pre>
+    `;
   } else if (fixLabel && fixBox) {
     fixLabel.hidden = true;
     fixBox.hidden = true;
@@ -112,6 +118,25 @@ function escapeHtml(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+window.copyCode = function(btn) {
+  const container = btn.closest(".fix-container, .finding-fix");
+  if (!container) return;
+  const codeEl = container.querySelector("code");
+  if (!codeEl) return;
+  const text = codeEl.innerText || codeEl.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const originalText = btn.textContent;
+    btn.textContent = "✓ Copied!";
+    btn.classList.add("copied");
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.classList.remove("copied");
+    }, 2000);
+  }).catch(err => {
+    console.error("Clipboard copy failed:", err);
+  });
+};
 
 function setVerdictBadge(elId, verdict) {
   const el = document.getElementById(elId);
@@ -193,7 +218,10 @@ function renderScanResults(data) {
     if (finding.suggested_fix) {
       fixHtml = `
         <div class="finding-fix">
-          <div class="fix-label">Suggested Fix:</div>
+          <div class="fix-header">
+            <span class="fix-label">Suggested Fix:</span>
+            <button class="copy-fix-btn" onclick="copyCode(this)">📋 Copy Fix</button>
+          </div>
           <pre><code>${escapeHtml(finding.suggested_fix.trim())}</code></pre>
         </div>
       `;

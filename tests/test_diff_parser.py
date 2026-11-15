@@ -104,6 +104,55 @@ def another():
             self.assertNotIn("def helper():", context)
             self.assertNotIn("def another():", context)
 
+    def test_extract_function_context_javascript(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sample_js = """import express from 'express';
+
+function unusedHelper() {
+    return false;
+}
+
+async function loginHandler(req, res) {
+    const { username, password } = req.body;
+    if (!username) {
+        return res.status(400).send('No username');
+    }
+    const token = await createToken(username);
+    return res.json({ token });
+}
+"""
+            js_file = Path(tmpdir) / "auth.js"
+            js_file.write_text(sample_js)
+
+            # Target line 11: const token = await createToken(username);
+            context = extract_function_context("auth.js", 11, 11, repo_path=tmpdir)
+            self.assertIn("async function loginHandler(req, res) {", context)
+            self.assertIn("return res.json({ token });", context)
+            self.assertNotIn("function unusedHelper()", context)
+
+    def test_extract_function_context_java(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sample_java = """public class UserService {
+    @Transactional
+    public User registerUser(
+        String username,
+        String email
+    ) {
+        validateEmail(email);
+        User user = new User(username, email);
+        return userRepository.save(user);
+    }
+}
+"""
+            java_file = Path(tmpdir) / "UserService.java"
+            java_file.write_text(sample_java)
+
+            # Target line 8: User user = new User(username, email);
+            context = extract_function_context("UserService.java", 8, 8, repo_path=tmpdir)
+            self.assertIn("public User registerUser", context)
+            self.assertIn("@Transactional", context)
+            self.assertIn("return userRepository.save(user);", context)
+
     def test_build_chunks_with_spec_injection(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             py_file = Path(tmpdir) / "service.py"
