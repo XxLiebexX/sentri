@@ -6,16 +6,25 @@ Run this against the held-out val.jsonl set and report, for each strategy:
   - accuracy (precision/recall on vulnerable vs safe)
   - % of examples that hit the Gemini API (cost proxy)
 
-Run: python eval/compare_strategies.py
+Run: python eval/compare_strategies.py [--max-samples N]
 """
 
+import os
+import sys
 import json
+import asyncio
+import argparse
+from pathlib import Path
+
+# Add project root to sys.path so imports work cleanly regardless of CWD
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from src.local_model import LocalReviewer
-from src.router import review_code, escalate_to_gemini
+from src.router import review_code, escalate_to_gemini, CONFIDENCE_THRESHOLD, ReviewResult
 
 
 def load_val_set(path: str = "data/val.jsonl"):
-    return [json.loads(line) for line in open(path)]
+    return [json.loads(line) for line in open(path) if line.strip()]
 
 
 def score(predictions: list, ground_truth: list) -> dict:
@@ -36,41 +45,92 @@ def score(predictions: list, ground_truth: list) -> dict:
     recall = tp / (tp + fn) if (tp + fn) else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
 
-    return {"precision": round(precision, 3), "recall": round(recall, 3), "f1": round(f1, 3)}
+    return {
+        "precision": round(precision, 3),
+        "recall": round(recall, 3),
+        "f1": round(f1, 3),
+        "total": len(predictions),
+        "tp": tp, "fp": fp, "tn": tn, "fn": fn,
+    }
 
 
-def run_comparison():
-    val_set = load_val_set()
-    ground_truth = [json.loads(ex["output"])["verdict"] for ex in val_set]
+async def run_comparison(val_path: str = "data/val.jsonl", max_samples: int | None = None):
+    val_set = load_val_set(val_path)
+    if max_samples:
+        val_set = val_set[:max_samples]
 
+    if not val_set:
+        print(f"[eval] No validation samples found in {val_path}")
+        return
+
+    ground_truth = []
+    for ex in val_set:
+        try:
+            parsed = json.loads(ex["output"])
+            ground_truth.append(parsed.get("verdict", "unknown"))
+        except Exception:
+            ground_truth.append("unknown")
+
+    print(f"[eval] Initializing LocalReviewer (mps/cpu)...")
     local_reviewer = LocalReviewer()
 
-    local_only_preds, hybrid_preds, gemini_calls = [], [], 0
+    local_only_preds = []
+    hybrid_preds = []
+    gemini_calls = 0
 
-    for ex in val_set:
+    print(f"[eval] Running evaluation on {len(val_set)} samples...\n")
+
+    for i, ex in enumerate(val_set, 1):
         code = ex["input"]
+        truth = ground_truth[i - 1]
+        print(f"--- Sample {i}/{len(val_set)} (Ground truth: {truth}) ---")
 
         # Strategy A: local model only, no escalation
         local_verdict = local_reviewer.review(code)
         local_only_preds.append(local_verdict.verdict)
+        print(f"  [Local Model] verdict: {local_verdict.verdict} | confidence: {local_verdict.confidence:.3f}")
 
-        # Strategy B: local + escalation (the actual Sentri design)
-        result = review_code(code, local_reviewer)
+        # Strategy B: local + escalation (reuse local_verdict to avoid duplicate local inference)
+        should_escalate = (
+            local_verdict.confidence < CONFIDENCE_THRESHOLD
+            or local_verdict.verdict in ("vulnerable", "unknown")
+        )
+        if should_escalate:
+            result = await escalate_to_gemini(code)
+        else:
+            result = ReviewResult(
+                verdict=local_verdict.verdict,
+                cwe=local_verdict.cwe,
+                explanation=local_verdict.explanation,
+                source="local",
+            )
         hybrid_preds.append(result.verdict)
-        if result.source == "gemini":
+        escalated = result.source == "gemini"
+        if escalated:
             gemini_calls += 1
+        print(f"  [Sentri Hybrid] verdict: {result.verdict} | source: {result.source} | escalated: {escalated}")
 
-    print("=== Local model only ===")
-    print(score(local_only_preds, ground_truth))
+    print("\n" + "=" * 60)
+    print("=== Strategy A: Local Model Only ===")
+    print(json.dumps(score(local_only_preds, ground_truth), indent=2))
 
-    print("\n=== Local + Gemini escalation (Sentri design) ===")
-    print(score(hybrid_preds, ground_truth))
-    print(f"Escalated to Gemini: {gemini_calls}/{len(val_set)} "
-          f"({100 * gemini_calls / len(val_set):.1f}% of calls)")
+    print("\n=== Strategy B: Local + Gemini Escalation (Sentri Design) ===")
+    print(json.dumps(score(hybrid_preds, ground_truth), indent=2))
 
-    print("\nThis last number is the pitch: if escalation rate is e.g. 30%, "
-          "you're getting near-Gemini-only accuracy at ~30% of the API cost.")
+    escalation_rate = (gemini_calls / len(val_set)) * 100
+    print(f"\nEscalated to Gemini: {gemini_calls}/{len(val_set)} ({escalation_rate:.1f}% of calls)")
+    print(f"API Cost Savings: {100.0 - escalation_rate:.1f}% reduction in cloud API calls vs. full cloud review")
+    print("=" * 60)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Evaluate Sentri routing strategies against validation set.")
+    parser.add_argument("--val-set", default="data/val.jsonl", help="Path to val.jsonl dataset")
+    parser.add_argument("--max-samples", type=int, default=None, help="Max number of samples to evaluate")
+    args = parser.parse_args()
+
+    asyncio.run(run_comparison(val_path=args.val_set, max_samples=args.max_samples))
 
 
 if __name__ == "__main__":
-    run_comparison()
+    main()

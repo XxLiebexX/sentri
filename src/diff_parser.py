@@ -148,8 +148,56 @@ def _extract_padded_window(lines: list[str], line_start: int, line_end: int, pad
     return "".join(lines[start:end])
 
 
-def build_chunks(diff_text: str, repo_path: str = ".") -> list[CodeChunk]:
-    """Main entry point: raw diff -> list of CodeChunk with full context."""
+def slice_spec_for_file(spec, file_path: str) -> str:
+    """
+    Extract the relevant slice of a Stage 0 ProjectSpec for a specific file being reviewed.
+    Matches key modules, relevant conventions, and risk areas to give the LLM
+    ground-truth context about this specific file within the overall architecture.
+    """
+    if not spec:
+        return ""
+
+    if hasattr(spec, "to_dict"):
+        spec_dict = spec.to_dict()
+    elif isinstance(spec, dict):
+        spec_dict = spec
+    else:
+        return ""
+
+    sections = []
+
+    project_type = spec_dict.get("project_type", "").strip()
+    purpose = spec_dict.get("purpose", "").strip()
+    if project_type or purpose:
+        sections.append(f"PROJECT OVERVIEW:\nType: {project_type}\nPurpose: {purpose}")
+
+    # Check key modules for path match
+    matched_modules = []
+    norm_file = file_path.strip().lstrip("/")
+    for mod in spec_dict.get("key_modules", []):
+        if isinstance(mod, dict):
+            mod_path = mod.get("path", "").strip().lstrip("/")
+            if mod_path and (mod_path in norm_file or norm_file.startswith(mod_path)):
+                role = mod.get("role", "")
+                matched_modules.append(f"- {mod_path}: {role}")
+    if matched_modules:
+        sections.append("MATCHED MODULE ROLE:\n" + "\n".join(matched_modules))
+
+    # Relevant conventions
+    conventions = spec_dict.get("conventions", [])
+    if conventions:
+        sections.append("PROJECT CONVENTIONS:\n" + "\n".join(f"- {c}" for c in conventions))
+
+    # Risk areas
+    risk_areas = spec_dict.get("risk_areas", [])
+    if risk_areas:
+        sections.append("HIGH-RISK AREAS TO WATCH:\n" + "\n".join(f"- {r}" for r in risk_areas))
+
+    return "\n\n".join(sections).strip()
+
+
+def build_chunks(diff_text: str, repo_path: str = ".", spec=None) -> list[CodeChunk]:
+    """Main entry point: raw diff -> list of CodeChunk with full context and sliced spec context."""
     raw_hunks = parse_diff(diff_text)
     chunks = []
 
@@ -157,12 +205,14 @@ def build_chunks(diff_text: str, repo_path: str = ".") -> list[CodeChunk]:
         context = extract_function_context(
             hunk["file"], hunk["line_start"], hunk["line_end"], repo_path
         )
+        spec_context = slice_spec_for_file(spec, hunk["file"]) if spec else ""
         chunks.append(CodeChunk(
             file=hunk["file"],
             line_start=hunk["line_start"],
             line_end=hunk["line_end"],
             diff_text=hunk["diff_text"],
             full_context=context,
+            spec_context=spec_context,
         ))
 
     return chunks

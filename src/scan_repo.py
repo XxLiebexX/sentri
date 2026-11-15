@@ -27,6 +27,7 @@ from src.ingest import IGNORE_DIRS, clone_repo, get_commit_hash
 from src.summarize import summarize_repo, ProjectSpec
 from src.ingest import ingest_repo
 from src.static_analysis import run_semgrep, StaticFinding
+from src.diff_parser import slice_spec_for_file
 
 SOURCE_EXTENSIONS = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".go", ".rb", ".php",
@@ -174,7 +175,8 @@ async def scan_repo(repo_url: str, max_files: int = 20, skip_ai: bool = False, s
 
                 print(f"[scan] Reviewing file ({i}/{len(files_to_scan)}): {rel_path}")
                 try:
-                    res = await run_ai_review_on_file(rel_path, content, local_reviewer, spec_context)
+                    file_spec = slice_spec_for_file(project_spec_dict, rel_path) or spec_context
+                    res = await run_ai_review_on_file(rel_path, content, local_reviewer, file_spec)
                     findings.extend(res)
                 except Exception as e:
                     print(f"[scan] Error reviewing {rel_path}: {e}")

@@ -23,9 +23,12 @@ import subprocess
 import requests
 from fastapi import FastAPI, Request, HTTPException
 
-from src.diff_parser import build_chunks
+from src.diff_parser import build_chunks, slice_spec_for_file
 from src.static_analysis import run_semgrep
 from src.llm_reviewer import review_all_chunks
+from src.cache import get_cached_spec, save_spec
+from src.ingest import ingest_repo, get_commit_hash
+from src.summarize import summarize_repo, ProjectSpec
 
 app = FastAPI(title="Sentri GitHub Bot")
 
@@ -78,7 +81,7 @@ def get_changed_files_api(owner: str, repo: str, pr_number: int) -> list[str]:
 
 
 def post_review_comment(owner: str, repo: str, pr_number: int, commit_sha: str, finding) -> None:
-    """Post a single finding as an inline PR review comment."""
+    """Post a single finding as an inline PR review comment with fallback to PR general comment."""
     url = f"{GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_number}/comments"
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -94,7 +97,10 @@ def post_review_comment(owner: str, repo: str, pr_number: int, commit_sha: str, 
     }
     resp = requests.post(url, headers=headers, json=payload, timeout=15)
     if resp.status_code >= 300:
-        print(f"[github_bot] Failed to post comment on {finding.file}:{finding.line} -- {resp.text[:300]}")
+        print(f"[github_bot] Inline comment rejected ({resp.status_code}) on {finding.file}:{finding.line} -- falling back to PR general comment")
+        issue_url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{pr_number}/comments"
+        fallback_body = f"⚠️ **[{finding.severity.upper()}] {finding.category}** on `{finding.file}:{finding.line}` (via {finding.source})\n\n{finding.message}"
+        requests.post(issue_url, headers=headers, json={"body": fallback_body}, timeout=15)
 
 
 @app.post("/webhook")
@@ -127,8 +133,24 @@ async def handle_webhook(request: Request):
         if not changed_files:
             return {"status": "no_changes"}
 
+        # Retrieve or generate Stage 0 ground truth spec
+        spec = None
+        try:
+            base_sha = pr.get("base", {}).get("sha", "")
+            if base_sha:
+                spec = get_cached_spec(clone_url, base_sha)
+            if not spec:
+                print(f"[github_bot] Generating Stage 0 spec for {clone_url}...")
+                snapshot = ingest_repo(clone_url)
+                spec = summarize_repo(snapshot)
+                save_spec(spec)
+            else:
+                print(f"[github_bot] Loaded cached Stage 0 spec for {clone_url} ({base_sha[:8]})")
+        except Exception as e:
+            print(f"[github_bot] Warning: Could not obtain Stage 0 spec ({e}). Continuing review without spec context.")
+
         diff_text = get_pr_diff(owner, repo, pr_number)
-        chunks = build_chunks(diff_text, repo_path=repo_path)
+        chunks = build_chunks(diff_text, repo_path=repo_path, spec=spec)
         static_findings = run_semgrep(changed_files, repo_path=repo_path)
         findings = await review_all_chunks(chunks, static_findings)
 
