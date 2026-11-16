@@ -1,3 +1,14 @@
+---
+title: Sentri — Hybrid AI Code Review & Security Agent
+emoji: 🛡️
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # Sentri — Hybrid AI Code Review & Security Agent
 
 [![CI](https://github.com/XxLiebexX/sentri/actions/workflows/ci.yml/badge.svg)](https://github.com/XxLiebexX/sentri/actions/workflows/ci.yml)
@@ -97,6 +108,27 @@ Sentri will build, install Semgrep and dependencies, and start serving at **`htt
 
 ---
 
+### 🤗 Deploy Free on Hugging Face Spaces (16GB RAM)
+
+Sentri can be deployed for **free** on Hugging Face Spaces with 16GB RAM CPU:
+
+1. **Create a Space**:
+   - Go to [huggingface.co/new-space](https://huggingface.co/new-space).
+   - Enter Space name (e.g. `sentri`).
+   - Select **Docker** as Space SDK (Blank).
+   - Select **CPU basic · 2 vCPU · 16 GB RAM · Free**.
+2. **Add Environment Secrets**:
+   - In Space **Settings → Variables and secrets**:
+   - Add Secret: `GEMINI_API_KEY` = your Gemini API key.
+3. **Push to Hugging Face**:
+   ```bash
+   git remote add hf https://huggingface.co/spaces/<your-username>/sentri
+   git push hf main
+   ```
+   Hugging Face will automatically build the `Dockerfile`, launch FastAPI on port `7860`, and provide a public HTTPS URL with the interactive visual diff dashboard and API endpoints!
+
+---
+
 ## 💻 CLI Usage
 
 - **Generate Stage 0 Architecture Spec**:
@@ -138,4 +170,4 @@ By filtering safe code locally with a high confidence threshold (`0.98`), Sentri
 
 - **Monorepos**: Signal-file-based ingestion can miss context in complex monorepo layouts. Deep AST code graphs (via Tree-sitter / LSP) will be integrated to map multi-package dependencies.
 - **Private Repositories**: Currently assumes public repos or pre-configured local Git credentials. Adding GitHub App OAuth token generation is on the roadmap.
-- **Automated Fix Generation**: Expanding from detection to generating one-click remediation patch suggestions in PR comments.
+- **Automated Fix Generation**: ✅ Supported with GitHub Suggested Fix syntax (````suggestion ... ````) and 1-click clipboard remediation in web UI.
